@@ -27,6 +27,7 @@ export function Header() {
               key={l.href}
               href={l.href}
               className={path?.startsWith(l.href) ? 'nav-link active' : 'nav-link'}
+              aria-current={path?.startsWith(l.href) ? 'page' : undefined}
             >
               {l.label}
             </Link>
