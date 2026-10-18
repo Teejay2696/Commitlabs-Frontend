@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   TYPES,
   fmt,
@@ -27,6 +27,24 @@ export default function CreatePage() {
   const [days, setDays] = useState('30');
   const [agree, setAgree] = useState(false);
   const [created, setCreated] = useState<Commitment | null>(null);
+  const [amountTouched, setAmountTouched] = useState(false);
+  const [daysTouched, setDaysTouched] = useState(false);
+  const [attempted, setAttempted] = useState(false);
+  const [announcement, setAnnouncement] = useState('');
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const typeRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const amountRef = useRef<HTMLInputElement>(null);
+  const daysRef = useRef<HTMLInputElement>(null);
+  const prevStep = useRef(0);
+
+  // On step change: move focus to the new heading and announce it. Comparing with the
+  // previous step makes this a no-op on mount and on strict-mode effect replays.
+  useEffect(() => {
+    if (prevStep.current === step) return;
+    prevStep.current = step;
+    headingRef.current?.focus();
+    setAnnouncement(`Step ${step + 1} of ${STEP_LABELS.length}: ${STEP_LABELS[step]}`);
+  }, [step]);
 
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('type');
@@ -75,27 +93,71 @@ export default function CreatePage() {
     setStep(3);
   }
 
+  function onTypeKeyDown(e: React.KeyboardEvent<HTMLButtonElement>, index: number) {
+    let next = index;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (index + 1) % TYPES.length;
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp')
+      next = (index - 1 + TYPES.length) % TYPES.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = TYPES.length - 1;
+    else return;
+    e.preventDefault();
+    pickType(TYPES[next].id);
+    typeRefs.current[next]?.focus();
+  }
+
+  function goReview() {
+    if (!valid) {
+      setAttempted(true);
+      (amountErr ? amountRef : daysRef).current?.focus();
+      return;
+    }
+    setStep(2);
+  }
+
+  const showAmountErr = amountErr && (attempted || amountTouched);
+  const showDaysErr = daysErr && (attempted || daysTouched);
+  const describedBy = (hint: string, err: string | null | false) =>
+    err ? `${hint} ${hint}-err` : hint;
+
   return (
     <section className="container page narrow">
       <h1>Create a commitment</h1>
       <ol className="steps" aria-label="Progress">
         {STEP_LABELS.map((l, i) => (
-          <li key={l} className={i === step ? 'on' : i < step ? 'done' : ''}>
-            <span>{i + 1}</span> {l}
+          <li
+            key={l}
+            className={i === step ? 'on' : i < step ? 'done' : ''}
+            aria-current={i === step ? 'step' : undefined}
+          >
+            <span aria-hidden="true">{i + 1}</span> {l}
+            {i < step && <em className="sr-only"> (completed)</em>}
           </li>
         ))}
       </ol>
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {announcement}
+      </div>
 
       {step === 0 && (
         <div className="stack">
-          <div className="grid3">
-            {TYPES.map((t) => (
+          <h2 ref={headingRef} tabIndex={-1} id="type-heading">
+            Choose a commitment type
+          </h2>
+          <div className="grid3" role="radiogroup" aria-labelledby="type-heading">
+            {TYPES.map((t, i) => (
               <button
                 key={t.id}
+                ref={(el) => {
+                  typeRefs.current[i] = el;
+                }}
                 type="button"
+                role="radio"
+                aria-checked={type === t.id}
+                tabIndex={type === t.id ? 0 : -1}
                 className={`card pick ${type === t.id ? 'selected' : ''}`}
                 onClick={() => pickType(t.id)}
-                aria-pressed={type === t.id}
+                onKeyDown={(e) => onTypeKeyDown(e, i)}
               >
                 <h3>{t.name}</h3>
                 <p className="muted">{t.tagline}</p>
@@ -113,6 +175,9 @@ export default function CreatePage() {
 
       {step === 1 && (
         <div className="card stack">
+          <h2 ref={headingRef} tabIndex={-1}>
+            Configure
+          </h2>
           <label>
             Asset
             <select value={asset} onChange={(e) => setAsset(e.target.value)}>
@@ -121,26 +186,50 @@ export default function CreatePage() {
               ))}
             </select>
           </label>
-          <label>
-            Amount
-            <input
-              inputMode="decimal"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              aria-invalid={!!amountErr}
-            />
-            {amountErr && <small className="err">{amountErr}</small>}
-          </label>
-          <label>
-            Lock duration (days)
-            <input
-              inputMode="numeric"
-              value={days}
-              onChange={(e) => setDays(e.target.value)}
-              aria-invalid={!!daysErr}
-            />
-            {daysErr && <small className="err">{daysErr}</small>}
-          </label>
+          <div className="field">
+            <label>
+              Amount
+              <input
+                ref={amountRef}
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                onBlur={() => setAmountTouched(true)}
+                aria-invalid={!!showAmountErr}
+                aria-describedby={describedBy('amount', showAmountErr)}
+              />
+            </label>
+            <small id="amount" className="muted">
+              Enter a number greater than zero.
+            </small>
+            {showAmountErr && (
+              <small id="amount-err" className="err">
+                {amountErr}
+              </small>
+            )}
+          </div>
+          <div className="field">
+            <label>
+              Lock duration (days)
+              <input
+                ref={daysRef}
+                inputMode="numeric"
+                value={days}
+                onChange={(e) => setDays(e.target.value)}
+                onBlur={() => setDaysTouched(true)}
+                aria-invalid={!!showDaysErr}
+                aria-describedby={describedBy('days', showDaysErr)}
+              />
+            </label>
+            <small id="days" className="muted">
+              Whole days, from {spec.minDays} to 365.
+            </small>
+            {showDaysErr && (
+              <small id="days-err" className="err">
+                {daysErr}
+              </small>
+            )}
+          </div>
           <ul className="kv">
             <li>
               <span>Max loss tolerance</span>
@@ -161,7 +250,7 @@ export default function CreatePage() {
             <button className="btn btn-ghost" onClick={() => setStep(0)}>
               Back
             </button>
-            <button className="btn btn-primary" disabled={!valid} onClick={() => setStep(2)}>
+            <button className="btn btn-primary" onClick={goReview}>
               Review
             </button>
           </div>
@@ -170,7 +259,9 @@ export default function CreatePage() {
 
       {step === 2 && (
         <div className="card stack">
-          <h2>Review</h2>
+          <h2 ref={headingRef} tabIndex={-1}>
+            Review
+          </h2>
           <ul className="kv">
             <li>
               <span>Type</span>
@@ -228,7 +319,9 @@ export default function CreatePage() {
           <div className="check-big" aria-hidden="true">
             &#10003;
           </div>
-          <h2>Commitment created</h2>
+          <h2 ref={headingRef} tabIndex={-1}>
+            Commitment created
+          </h2>
           <p className="muted">
             {created.id} &middot; {fmt(created.amount)} {created.asset} for {created.durationDays}{' '}
             days

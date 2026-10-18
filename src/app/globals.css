@@ -96,6 +96,10 @@ input:focus, select:focus, .btn:focus-visible, a:focus-visible { outline: 2px so
 input[aria-invalid='true'] { border-color: var(--danger); }
 input[type='checkbox'] { margin-top: 4px; }
 .err { color: var(--danger); font-weight: 400; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+h2:focus { outline: none; }
+.pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .check-big { width: 56px; height: 56px; border-radius: 50%; background: var(--ok); color: #05210f; font-size: 1.8rem; display: grid; place-items: center; font-weight: 700; margin: 0 auto; }
 .metric { display: flex; flex-direction: column; gap: 4px; }
 .metric b { font-size: 1.7rem; }
