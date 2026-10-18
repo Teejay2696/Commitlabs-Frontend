@@ -33,7 +33,6 @@ yarn-error.log*
 
 # local env files
 .env*.local
-.env
 
 # vercel
 .vercel
@@ -50,7 +49,5 @@ contracts/target/
 **/target/
 branch_structure.json
 .npm-cache/
-.env
-.env.local
 .vercel
-.env*
+config.bat
